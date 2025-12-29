@@ -1,0 +1,24 @@
+{
+  "service": {
+    "name": "customer-service",
+    "host": "httpbin.org",
+    "port": 80,
+    "protocol": "http"
+  },
+  "route": {
+    "name": "customer-route",
+    "paths": ["/customers"]
+  },
+  "plugins": [
+    {
+      "name": "rate-limiting",
+      "config": {
+        "minute": 5,
+        "policy": "local"
+      }
+    },
+    {
+      "name": "key-auth"
+    }
+  ]
+}
