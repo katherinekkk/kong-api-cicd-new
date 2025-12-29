@@ -12,31 +12,47 @@ steps:
 
 - checkout: self
 
-# 1) Verify tools exist
+# 1) Install jq and decK locally (no sudo)
 - task: Bash@3
-  displayName: "Verify jq and decK"
+  displayName: "Install jq and decK (no sudo)"
   inputs:
     targetType: inline
     script: |
+      set -e
+
+      mkdir -p $(Pipeline.Workspace)/tools
+      cd $(Pipeline.Workspace)/tools
+
+      echo "Installing jq..."
+      curl -L -o jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+      chmod +x jq
+
+      echo "Installing decK..."
+      curl -L -o deck.tar.gz https://github.com/kong/deck/releases/download/v1.35.0/deck_1.35.0_linux_amd64.tar.gz
+      tar -xzf deck.tar.gz
+      chmod +x deck
+
+      echo "Updating PATH..."
+      echo "##vso[task.setvariable variable=PATH]$PATH:$(Pipeline.Workspace)/tools"
+
       jq --version
-      deck version
+      ./deck version
 
 # 2) Generate YAML from JSON
 - task: Bash@3
-  displayName: "Generate Kong YAML"
+  displayName: "Generate Kong YAML from JSON"
   inputs:
     targetType: inline
     script: |
-      echo "Working directory:"
-      pwd
+      export PATH=$(Pipeline.Workspace)/tools:$PATH
 
-      mkdir -p $(Build.SourcesDirectory)/converted-apis
+      mkdir -p converted-apis
 
       chmod +x scripts/generate-kong-yaml.sh
       ./scripts/generate-kong-yaml.sh
 
-      echo "Files generated:"
-      ls -R $(Build.SourcesDirectory)
+      echo "Generated files:"
+      ls -R
 
 # 3) Test Kong connectivity
 - task: Bash@3
@@ -44,15 +60,17 @@ steps:
   inputs:
     targetType: inline
     script: |
-      deck gateway ping --kong-addr $(KONG_ADMIN)
+      export PATH=$(Pipeline.Workspace)/tools:$PATH
+      ./deck gateway ping --kong-addr $(KONG_ADMIN)
 
-# 4) Deploy using decK (absolute path)
+# 4) Deploy to Kong
 - task: Bash@3
   displayName: "Deploy API using decK"
   inputs:
     targetType: inline
     script: |
-      deck gateway sync \
-        --kong-addr $(KONG_ADMIN) \
-        $(Build.SourcesDirectory)/converted-apis/onboard-api.yaml
+      export PATH=$(Pipeline.Workspace)/tools:$PATH
 
+      ./deck gateway sync \
+        --kong-addr $(KONG_ADMIN) \
+        converted-apis/onboard-api.yaml
