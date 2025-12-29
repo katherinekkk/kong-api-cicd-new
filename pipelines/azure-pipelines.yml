@@ -12,15 +12,18 @@ steps:
 
 - checkout: self
 
+# 1) Verify tools exist (no sudo installation)
 - task: Bash@3
-  displayName: "Install dependencies (jq + decK)"
+  displayName: "Verify tools installed (jq + decK)"
   inputs:
     targetType: inline
     script: |
-      sudo apt-get update
-      sudo apt-get install -y jq
-      curl -sL https://github.com/kong/deck/releases/download/v1.35.0/deck_1.35.0_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin deck
+      echo "Checking jq..."
+      jq --version
+      echo "Checking decK..."
+      deck version
 
+# 2) Generate Kong YAML from JSON definition
 - task: Bash@3
   displayName: "Generate Kong YAML from JSON"
   inputs:
@@ -28,8 +31,10 @@ steps:
     script: |
       chmod +x scripts/generate-kong-yaml.sh
       ./scripts/generate-kong-yaml.sh
-      ls -R
+      echo "Generated files:"
+      ls -R converted-apis
 
+# 3) Test Kong Admin API connectivity
 - task: Bash@3
   displayName: "Test Kong Admin API connectivity"
   inputs:
@@ -37,6 +42,7 @@ steps:
     script: |
       deck gateway ping --kong-addr $(KONG_ADMIN)
 
+# 4) Deploy API + Route + Plugins to Kong
 - task: Bash@3
   displayName: "Deploy API using decK"
   inputs:
