@@ -12,29 +12,33 @@ steps:
 
 - checkout: self
 
-# 1) Verify tools exist (no sudo installation)
+# 1) Verify tools exist
 - task: Bash@3
-  displayName: "Verify tools installed (jq + decK)"
+  displayName: "Verify jq and decK"
   inputs:
     targetType: inline
     script: |
-      echo "Checking jq..."
       jq --version
-      echo "Checking decK..."
       deck version
 
-# 2) Generate Kong YAML from JSON definition
+# 2) Generate YAML from JSON
 - task: Bash@3
-  displayName: "Generate Kong YAML from JSON"
+  displayName: "Generate Kong YAML"
   inputs:
     targetType: inline
     script: |
+      echo "Working directory:"
+      pwd
+
+      mkdir -p $(Build.SourcesDirectory)/converted-apis
+
       chmod +x scripts/generate-kong-yaml.sh
       ./scripts/generate-kong-yaml.sh
-      echo "Generated files:"
-      ls -R converted-apis
 
-# 3) Test Kong Admin API connectivity
+      echo "Files generated:"
+      ls -R $(Build.SourcesDirectory)
+
+# 3) Test Kong connectivity
 - task: Bash@3
   displayName: "Test Kong Admin API connectivity"
   inputs:
@@ -42,7 +46,7 @@ steps:
     script: |
       deck gateway ping --kong-addr $(KONG_ADMIN)
 
-# 4) Deploy API + Route + Plugins to Kong
+# 4) Deploy using decK (absolute path)
 - task: Bash@3
   displayName: "Deploy API using decK"
   inputs:
@@ -50,4 +54,5 @@ steps:
     script: |
       deck gateway sync \
         --kong-addr $(KONG_ADMIN) \
-        converted-apis/onboard-api.yaml
+        $(Build.SourcesDirectory)/converted-apis/onboard-api.yaml
+
