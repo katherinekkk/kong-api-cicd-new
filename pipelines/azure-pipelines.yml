@@ -12,31 +12,15 @@ steps:
 
 - checkout: self
 
-# 1) Install jq and decK locally (no sudo)
+# 1) Ensure jq and decK exist (no sudo password prompts)
 - task: Bash@3
-  displayName: "Install jq and decK (no sudo)"
+  displayName: "Verify tools jq + decK"
   inputs:
     targetType: inline
     script: |
-      set -e
-
-      mkdir -p $(Pipeline.Workspace)/tools
-      cd $(Pipeline.Workspace)/tools
-
-      echo "Installing jq..."
-      curl -L -o jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
-      chmod +x jq
-
-      echo "Installing decK..."
-      curl -L -o deck.tar.gz https://github.com/kong/deck/releases/download/v1.35.0/deck_1.35.0_linux_amd64.tar.gz
-      tar -xzf deck.tar.gz
-      chmod +x deck
-
-      echo "Updating PATH..."
-      echo "##vso[task.setvariable variable=PATH]$PATH:$(Pipeline.Workspace)/tools"
-
-      jq --version
-      ./deck version
+      which jq || echo "jq not found"
+      which deck || echo "deck not found"
+      deck version
 
 # 2) Generate YAML from JSON
 - task: Bash@3
@@ -44,15 +28,10 @@ steps:
   inputs:
     targetType: inline
     script: |
-      export PATH=$(Pipeline.Workspace)/tools:$PATH
-
-      mkdir -p converted-apis
-
       chmod +x scripts/generate-kong-yaml.sh
       ./scripts/generate-kong-yaml.sh
-
       echo "Generated files:"
-      ls -R
+      ls -R converted-apis
 
 # 3) Test Kong connectivity
 - task: Bash@3
@@ -60,17 +39,14 @@ steps:
   inputs:
     targetType: inline
     script: |
-      export PATH=$(Pipeline.Workspace)/tools:$PATH
-      ./deck gateway ping --kong-addr $(KONG_ADMIN)
+      deck gateway ping --kong-addr $(KONG_ADMIN)
 
-# 4) Deploy to Kong
+# 4) Deploy API to Kong
 - task: Bash@3
   displayName: "Deploy API using decK"
   inputs:
     targetType: inline
     script: |
-      export PATH=$(Pipeline.Workspace)/tools:$PATH
-
-      ./deck gateway sync \
+      deck gateway sync \
         --kong-addr $(KONG_ADMIN) \
         converted-apis/onboard-api.yaml
