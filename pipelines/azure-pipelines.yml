@@ -12,41 +12,52 @@ steps:
 
 - checkout: self
 
-# 1) Ensure jq and decK exist (no sudo password prompts)
+# 1) Download jq + decK locally (no sudo needed)
 - task: Bash@3
-  displayName: "Verify tools jq + decK"
+  displayName: "Download jq and decK locally"
   inputs:
     targetType: inline
     script: |
-      which jq || echo "jq not found"
-      which deck || echo "deck not found"
-      deck version
+      mkdir -p tools
 
-# 2) Generate YAML from JSON
+      echo "Downloading jq..."
+      curl -L -o tools/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+      chmod +x tools/jq
+
+      echo "Downloading decK..."
+      curl -L -o deck.tar.gz https://github.com/kong/deck/releases/download/v1.35.0/deck_1.35.0_linux_amd64.tar.gz
+      tar -xzf deck.tar.gz -C tools deck
+      chmod +x tools/deck
+
+      echo "Tools installed:"
+      tools/jq --version
+      tools/deck version
+
+# 2) Generate YAML from JSON using our jq
 - task: Bash@3
   displayName: "Generate Kong YAML from JSON"
   inputs:
     targetType: inline
     script: |
       chmod +x scripts/generate-kong-yaml.sh
-      ./scripts/generate-kong-yaml.sh
+      JQ=tools/jq ./scripts/generate-kong-yaml.sh
       echo "Generated files:"
       ls -R converted-apis
 
-# 3) Test Kong connectivity
+# 3) Test connectivity
 - task: Bash@3
   displayName: "Test Kong Admin API connectivity"
   inputs:
     targetType: inline
     script: |
-      deck gateway ping --kong-addr $(KONG_ADMIN)
+      tools/deck gateway ping --kong-addr $(KONG_ADMIN)
 
-# 4) Deploy API to Kong
+# 4) Deploy config
 - task: Bash@3
   displayName: "Deploy API using decK"
   inputs:
     targetType: inline
     script: |
-      deck gateway sync \
-        --kong-addr $(KONG_ADMIN) \
-        converted-apis/onboard-api.yaml
+      tools/deck gateway sync \
+         --kong-addr $(KONG_ADMIN) \
+         converted-apis/onboard-api.yaml
