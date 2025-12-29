@@ -1,5 +1,11 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+# Expect jq path to be injected by pipeline: JQ=tools/jq ./script.sh
+if [[ -z "${JQ:-}" ]]; then
+  echo "ERROR: JQ variable not set. Call script as: JQ=/path/to/jq ./generate-kong-yaml.sh"
+  exit 1
+fi
 
 INPUT_FILE="apis/onboard-api.json"
 OUTPUT_DIR="converted-apis"
@@ -7,16 +13,18 @@ OUTPUT_FILE="$OUTPUT_DIR/onboard-api.yaml"
 
 mkdir -p "$OUTPUT_DIR"
 
-SERVICE_NAME=$(jq -r '.service_name' $INPUT_FILE)
-ROUTE_NAME=$(jq -r '.route_name' $INPUT_FILE)
-PATH=$(jq -r '.path' $INPUT_FILE)
-HOST=$(jq -r '.host' $INPUT_FILE)
-PORT=$(jq -r '.port' $INPUT_FILE)
-PROTOCOL=$(jq -r '.protocol' $INPUT_FILE)
+echo "Reading input JSON: $INPUT_FILE"
 
-RATE_MINUTE=$(jq -r '.plugins["rate-limiting"].minute' $INPUT_FILE)
+SERVICE_NAME=$($JQ -r '.service_name' "$INPUT_FILE")
+ROUTE_NAME=$($JQ -r '.route_name' "$INPUT_FILE")
+ROUTE_PATH=$($JQ -r '.path' "$INPUT_FILE")
+HOST=$($JQ -r '.host' "$INPUT_FILE")
+PORT=$($JQ -r '.port' "$INPUT_FILE")
+PROTOCOL=$($JQ -r '.protocol' "$INPUT_FILE")
 
-cat > $OUTPUT_FILE <<EOF
+RATE_MINUTE=$($JQ -r '.plugins["rate-limiting"].minute' "$INPUT_FILE")
+
+cat > "$OUTPUT_FILE" <<EOF
 _workspace: default
 _format_version: "3.0"
 
@@ -29,7 +37,7 @@ services:
   routes:
   - name: $ROUTE_NAME
     paths:
-    - $PATH
+    - "$ROUTE_PATH"
 
 plugins:
 - name: rate-limiting
@@ -40,4 +48,5 @@ plugins:
 - name: key-auth
 EOF
 
-echo "Generated YAML: $OUTPUT_FILE"
+echo "Generated YAML successfully:"
+echo "  $OUTPUT_FILE"
