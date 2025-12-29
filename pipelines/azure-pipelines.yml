@@ -1,0 +1,46 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  KONG_ADMIN: "http://<YOUR-KONG-IP>:8001"
+
+steps:
+
+- checkout: self
+
+- task: Bash@3
+  displayName: "Install dependencies (jq + decK)"
+  inputs:
+    targetType: inline
+    script: |
+      sudo apt-get update
+      sudo apt-get install -y jq
+      curl -sL https://github.com/kong/deck/releases/download/v1.35.0/deck_1.35.0_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin deck
+
+- task: Bash@3
+  displayName: "Generate Kong YAML from JSON"
+  inputs:
+    targetType: inline
+    script: |
+      chmod +x scripts/generate-kong-yaml.sh
+      ./scripts/generate-kong-yaml.sh
+      ls -R
+
+- task: Bash@3
+  displayName: "Test Kong Admin API connectivity"
+  inputs:
+    targetType: inline
+    script: |
+      deck gateway ping --kong-addr $(KONG_ADMIN)
+
+- task: Bash@3
+  displayName: "Deploy API using decK"
+  inputs:
+    targetType: inline
+    script: |
+      deck gateway sync \
+        --kong-addr $(KONG_ADMIN) \
+        converted-apis/onboard-api.yaml
