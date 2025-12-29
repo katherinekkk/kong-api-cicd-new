@@ -1,52 +1,43 @@
 #!/bin/bash
 set -e
 
-INPUT="apis/onboard-api.json"
-OUTPUT="converted-apis/onboard-api.yaml"
+INPUT_FILE="apis/onboard-api.json"
+OUTPUT_DIR="converted-apis"
+OUTPUT_FILE="$OUTPUT_DIR/onboard-api.yaml"
 
-mkdir -p converted-apis
+mkdir -p "$OUTPUT_DIR"
 
-SERVICE_NAME=$(jq -r '.service.name' $INPUT)
-SERVICE_HOST=$(jq -r '.service.host' $INPUT)
-SERVICE_PORT=$(jq -r '.service.port' $INPUT)
-SERVICE_PROTOCOL=$(jq -r '.service.protocol' $INPUT)
+SERVICE_NAME=$(jq -r '.service_name' $INPUT_FILE)
+ROUTE_NAME=$(jq -r '.route_name' $INPUT_FILE)
+PATH=$(jq -r '.path' $INPUT_FILE)
+HOST=$(jq -r '.host' $INPUT_FILE)
+PORT=$(jq -r '.port' $INPUT_FILE)
+PROTOCOL=$(jq -r '.protocol' $INPUT_FILE)
 
-ROUTE_NAME=$(jq -r '.route.name' $INPUT)
+RATE_MINUTE=$(jq -r '.plugins["rate-limiting"].minute' $INPUT_FILE)
 
-ROUTE_PATHS=$(jq -r '.route.paths[]' $INPUT)
-
-cat > $OUTPUT <<EOF
+cat > $OUTPUT_FILE <<EOF
 _workspace: default
 _format_version: "3.0"
 
 services:
-- name: ${SERVICE_NAME}
-  host: ${SERVICE_HOST}
-  port: ${SERVICE_PORT}
-  protocol: ${SERVICE_PROTOCOL}
+- name: $SERVICE_NAME
+  host: $HOST
+  port: $PORT
+  protocol: $PROTOCOL
 
   routes:
-  - name: ${ROUTE_NAME}
+  - name: $ROUTE_NAME
     paths:
+    - $PATH
+
+plugins:
+- name: rate-limiting
+  config:
+    minute: $RATE_MINUTE
+    policy: local
+
+- name: key-auth
 EOF
 
-for p in $ROUTE_PATHS; do
-echo "    - $p" >> $OUTPUT
-done
-
-echo "" >> $OUTPUT
-echo "plugins:" >> $OUTPUT
-
-jq -c '.plugins[]' $INPUT | while read plugin; do
-  NAME=$(echo $plugin | jq -r '.name')
-
-  echo "- name: $NAME" >> $OUTPUT
-
-  if echo $plugin | jq -e 'has("config")' > /dev/null; then
-    echo "  config:" >> $OUTPUT
-    echo $plugin | jq -r '.config | to_entries[] | "    \(.key): \(.value)"' >> $OUTPUT
-  fi
-
-done
-
-echo "Generated YAML: $OUTPUT"
+echo "Generated YAML: $OUTPUT_FILE"
